@@ -1,0 +1,6 @@
+.env
+.env.local
+logs/
+*.log
+certs/*
+!certs/.gitkeep

@@ -3,6 +3,14 @@
 Zentraler Reverse Proxy / API-Gateway fuer die Plattform.
 Das Gateway ist der einzige externe Eintrittspunkt und leitet Anfragen kontrolliert an interne Services weiter (`auth-service`, `profile-service`).
 
+## Aktueller Stand (2026-02-12 14:37:47 CET)
+
+- Container `nginx-gateway` laeuft `healthy`.
+- `GET https://127.0.0.1:8443/healthz` liefert `200`.
+- Upstream-Checks sind gruen:
+  - `GET https://127.0.0.1:8443/auth/healthz` -> `200`
+  - `GET https://127.0.0.1:8443/health/profile` -> `200`
+
 Der Fokus liegt auf:
 
 * klarer Trennung von Gateway <-> Services

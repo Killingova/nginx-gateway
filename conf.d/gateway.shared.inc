@@ -9,7 +9,7 @@ add_header X-Frame-Options DENY always;
 add_header X-Content-Type-Options nosniff always;
 add_header Referrer-Policy no-referrer always;
 add_header Permissions-Policy "accelerometer=(), camera=(), geolocation=(), microphone=()" always;
-add_header Content-Security-Policy "frame-ancestors 'none'" always;
+add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
 add_header X-Request-Id $gateway_request_id always;
 
 # ---------------------------
@@ -48,7 +48,7 @@ proxy_hide_header Access-Control-Allow-Headers;
 proxy_hide_header Access-Control-Allow-Methods;
 
 add_header Access-Control-Allow-Credentials $cors_allow_credentials always;
-add_header Access-Control-Allow-Headers "Authorization,Content-Type,Accept,Origin,X-Request-ID,X-Tenant-Id,x-tenant-id" always;
+add_header Access-Control-Allow-Headers "Authorization,Content-Type,Accept,Origin,X-Request-ID,X-Tenant-Id,x-tenant-id,X-CSRF-Token" always;
 add_header Access-Control-Allow-Methods "GET,POST,PUT,PATCH,DELETE,OPTIONS" always;
 add_header Access-Control-Max-Age 600 always;
 add_header Vary "Origin,Access-Control-Request-Method,Access-Control-Request-Headers" always;
@@ -73,7 +73,7 @@ if ($header_smuggling_detected) {
 # Debug (tenant-free)
 # ---------------------------
 location = /debug/tenant {
-  return 200 '{"tenant_from_header":"$tenant_from_header","tenant_missing":"$tenant_missing","tenant_allowed":"$tenant_allowed","tenant_unknown":"$tenant_unknown","skip_tenant_check":"$skip_tenant_check","tenant_reject_missing":"$tenant_reject_missing","tenant_reject_unknown":"$tenant_reject_unknown","host":"$host","x_tenant_id":"$http_x_tenant_id"}\n';
+  return 200 '{"tenant_from_header":"$tenant_from_header","tenant_missing":"$tenant_missing","tenant_allowed":"$tenant_allowed","tenant_unknown":"$tenant_unknown","skip_tenant_check":"$skip_tenant_check","tenant_reject_missing":"$tenant_reject_missing","tenant_reject_unknown":"$tenant_reject_unknown","auth_rate_route":"$auth_rate_route","auth_limit_key":"$auth_limit_key","host":"$host","x_tenant_id":"$http_x_tenant_id"}\n';
 }
 
 location = /__whoami {

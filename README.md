@@ -3,13 +3,25 @@
 Zentraler Reverse Proxy / API-Gateway fuer die Plattform.
 Das Gateway ist der einzige externe Eintrittspunkt und leitet Anfragen kontrolliert an interne Services weiter (`auth-service`, `profile-service`).
 
-## Aktueller Stand (2026-02-12 14:37:47 CET)
+## Zweck / Boundary
+- Einziger externer Einstiegspunkt fuer HTTP/HTTPS.
+- Routet kontrolliert zu internen Services im Docker-Netz.
+- Kein direkter Public-Zugriff auf Auth/Profile/DB.
+
+## Aktueller Stand (2026-02-12 17:57:26 CET)
 
 - Container `nginx-gateway` laeuft `healthy`.
 - `GET https://127.0.0.1:8443/healthz` liefert `200`.
 - Upstream-Checks sind gruen:
   - `GET https://127.0.0.1:8443/auth/healthz` -> `200`
   - `GET https://127.0.0.1:8443/health/profile` -> `200`
+- Auth Rate-Limit-Key ist final tenant-aware: `tenant + ip + route` (mind. `login`/`refresh` getrennt).
+- Gateway `limit_req` liefert jetzt konsistent `429` (kein irrefuehrendes `503` mehr).
+
+## Security Contract
+- TLS-Termination und Header-Hygiene am Gateway.
+- Tenant-aware Rate Limits und Edge-AuthZ (`auth_request`) fuer geschuetzte Pfade.
+- Metrics bleiben isoliert (`:18080`), `/metrics` auf Public Listener liefert `404`.
 
 Der Fokus liegt auf:
 
@@ -109,8 +121,20 @@ Feature-Routing und Sicherheits-Snippets (modular, versionsfaehig).
 ### Auth-Service
 
 ```
-/auth/*        -> auth-service:3000
+/auth/healthz  -> auth-service:/healthz (alias)
+/auth/login    -> auth-service:3000 (public, tenant-guarded)
+/auth/refresh  -> auth-service:3000 (public, tenant-guarded)
+/auth/me       -> auth-service:3000 (protected via auth_request)
+/auth/logout   -> auth-service:3000 (protected via auth_request)
+/auth/sessions*-> auth-service:3000 (protected via auth_request)
+/auth/*        -> auth-service:3000 (weitere Auth-Routen, tenant-guarded)
 ```
+
+Cookie/CSRF-Matrix (Contract):
+- Aktuell: kein Cookie-authenticated Endpoint am Gateway erzwungen (Bearer-Flow aktiv).
+- Sobald `/auth/refresh` auf Cookie-Auth umgestellt wird:
+  - CSRF-Schutz wird verpflichtend (`X-CSRF-Token` + Origin/Referer-Pruefung im Auth-Service).
+  - Fail-closed bleibt aktiv (Verify/Introspection-Ausfall => `503`).
 
 ### Profile-Service
 
@@ -206,7 +230,7 @@ Diese Einstellungen sind direkt aus Transport-/TCP-Grundlagen abgeleitet.
   * `X-Content-Type-Options`
   * `Referrer-Policy`
   * `Permissions-Policy`
-  * `Content-Security-Policy` (`frame-ancestors 'none'`)
+  * `Content-Security-Policy` (`default-src 'self'`, `script-src 'self'`, `frame-ancestors 'none'`, u. a.)
 * Header-Hygiene
 
   * Weitergabe nur relevanter Proxy-Header
@@ -215,6 +239,13 @@ Diese Einstellungen sind direkt aus Transport-/TCP-Grundlagen abgeleitet.
 
   * `/_auth_verify` delegiert Token-/Tenant-/Scope-/Role-Pruefung an Auth-Service
   * `/profiles/*` erzwingt method-basierte Scopes (`profile:read`/`profile:write`)
+  * `/auth/me`, `/auth/logout`, `/auth/sessions*` sind explizit protected
+  * Introspection-/Verify-Ausfall ist fail-closed (`503`), kein fail-open
+* Trusted Header Contract
+
+  * Clients duerfen keine trusted Identity-Header setzen (`X-User-Id`, Rollenheader).
+  * `X-Tenant-Id` wird am Gateway auf UUID-Pattern validiert/kanonisiert.
+  * Upstreams sollen nur Gateway-trusted Headern vertrauen.
 * Stable Error Envelope
 
   * JSON Fehler statt NGINX-HTML Defaults
@@ -229,6 +260,7 @@ Gateway garantiert:
 * `X-Request-Id` ist immer gesetzt (uebernommen oder erzeugt).
 * `X-Tenant-Id` wird nur kanonisiert/validiert weitergereicht (kein raw passthrough).
 * `X-Forwarded-Proto` und `X-Forwarded-Host` werden kontrolliert gesetzt.
+* Kein Forwarding von Client-seitig untrusted Identity-Headern als trusted User-Identity.
 
 Service garantiert:
 
@@ -238,7 +270,7 @@ Service garantiert:
 
 ---
 
-## Start & Betrieb
+## Ops
 
 ### Starten
 
@@ -291,6 +323,24 @@ curl -i http://127.0.0.1:18080/metrics
 4. Container ins `paradox_net` haengen
 
 Kein bestehender Code muss geaendert werden.
+
+## DoD Checks
+```bash
+curl -k -i https://127.0.0.1:8443/healthz
+curl -k -i https://127.0.0.1:8443/auth/healthz
+curl -k -i https://127.0.0.1:8443/health/profile
+curl -i http://127.0.0.1:18080/metrics
+curl -k -i https://127.0.0.1:8443/metrics
+```
+
+Erwartung:
+- Gateway- und Upstream-Health `200`.
+- Metrics auf Public-Listener nicht verfuegbar.
+
+## Guardrails
+- Keine direkten Service-Ports nach aussen.
+- Keine unvalidierten Tenant-Header an Upstreams durchreichen.
+- Security-/Error-Standards bleiben zentral im Gateway.
 
 ---
 

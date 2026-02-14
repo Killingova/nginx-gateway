@@ -122,7 +122,7 @@ Feature-Routing und Sicherheits-Snippets (modular, versionsfaehig).
 
 ```
 /auth/healthz  -> auth-service:/healthz (alias)
-/auth/login    -> auth-service:3000 (public, tenant-guarded)
+/auth/login    -> auth-service:3000 (public, tenant-free)
 /auth/refresh  -> auth-service:3000 (public, tenant-guarded)
 /auth/me       -> auth-service:3000 (protected via auth_request)
 /auth/logout   -> auth-service:3000 (protected via auth_request)
@@ -140,6 +140,7 @@ Cookie/CSRF-Matrix (Contract):
 
 ```
 /profiles/*    -> profile-service:4000
+/readings*     -> profile-service:4000
 ```
 
 ---
